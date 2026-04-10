@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeployLog Widget — Dev</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 24px; }
+    p { color: #555; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>Widget Dev Page</h1>
+  <p>This page simulates a customer's website with the DeployLog widget embedded.</p>
+  <p>The widget should appear in the bottom-right corner.</p>
+
+  <script
+    src="/widget.js"
+    data-project="YOUR_PROJECT_ID_HERE"
+    data-position="bottom-right"
+    data-theme="auto"
+    data-api-url="http://localhost:3001"
+    defer
+  ></script>
+</body>
+</html>
