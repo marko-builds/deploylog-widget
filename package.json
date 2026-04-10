@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src/widget.ts --bundle --minify --format=iife --outfile=dist/widget.js",
     "build:watch": "esbuild src/widget.ts --bundle --format=iife --outfile=dist/widget.js --watch",
-    "dev": "esbuild src/widget.ts --bundle --format=iife --outfile=dist/widget.js --servedir=dev --watch",
+    "dev": "esbuild src/widget.ts --bundle --format=iife --outfile=dev/widget.js --servedir=dev --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },
