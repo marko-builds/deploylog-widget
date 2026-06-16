@@ -201,11 +201,11 @@ class DeployLogWidget {
     // Email subscribe form
     panel.appendChild(this.renderSubscribeForm())
 
-    // Powered by footer (free tier only)
+    // Action-CTA footer (free tier only) — converts better than a passive logo.
     if (this.data.plan === 'free') {
       const footer = document.createElement('div')
       footer.className = 'dl-footer'
-      footer.innerHTML = `<a href="https://deploylog.dev" target="_blank" rel="noopener">Powered by DeployLog</a>`
+      footer.innerHTML = `<a href="https://deploylog.dev/?utm_source=widget&utm_medium=badge" target="_blank" rel="noopener">Create your own changelog →</a>`
       panel.appendChild(footer)
     }
 
