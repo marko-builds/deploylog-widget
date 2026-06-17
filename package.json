@@ -2,6 +2,7 @@
   "name": "deploylog-widget",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "esbuild src/widget.ts --bundle --minify --format=iife --outfile=dist/widget.js",
