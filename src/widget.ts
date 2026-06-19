@@ -7,6 +7,16 @@ const STORAGE_KEY_PREFIX = 'deploylog_seen_'
 // "no custom accent" so entry titles follow the theme by default.
 const DEFAULT_ACCENT = '#18181b'
 
+// Accent flows into generated <style> text, so constrain it to a hex color
+// (what the dashboard produces) before use — guards against CSS injection or
+// malformed values from data-accent or an unexpected API payload.
+const SAFE_ACCENT_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
+
+function normalizeAccent(input: string | null | undefined): string {
+  const v = input?.trim()
+  return v && SAFE_ACCENT_RE.test(v) ? v : DEFAULT_ACCENT
+}
+
 function init() {
   const script = document.currentScript as HTMLScriptElement | null
   if (!script) return
@@ -21,7 +31,7 @@ function init() {
     projectId,
     position: (script.getAttribute('data-position') as WidgetConfig['position']) ?? 'bottom-right',
     theme: (script.getAttribute('data-theme') as WidgetConfig['theme']) ?? 'auto',
-    accentColor: script.getAttribute('data-accent') ?? DEFAULT_ACCENT,
+    accentColor: normalizeAccent(script.getAttribute('data-accent')),
     apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
   }
 
@@ -52,17 +62,16 @@ class DeployLogWidget {
     this.shadow = this.container.attachShadow({ mode: 'closed' })
 
     // Add styles
-    const style = document.createElement('style')
-    this.styleEl = style
-    style.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
-    this.shadow.appendChild(style)
+    this.styleEl = document.createElement('style')
+    this.applyStyles()
+    this.shadow.appendChild(this.styleEl)
 
-    // Listen for system theme changes
-    if (this.config.theme === 'auto') {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        style.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
-      })
-    }
+    // Re-resolve an 'auto' theme on OS changes. Registered unconditionally so it
+    // still applies if the dashboard config later switches the theme to 'auto';
+    // the handler is a no-op for fixed light/dark themes.
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (this.config.theme === 'auto') this.applyStyles()
+    })
 
     // Render trigger button
     this.renderTrigger()
@@ -86,6 +95,12 @@ class DeployLogWidget {
   private accentForStyles(): string | undefined {
     const accent = this.config.accentColor
     return accent && accent.toLowerCase() !== DEFAULT_ACCENT ? accent : undefined
+  }
+
+  private applyStyles() {
+    if (this.styleEl) {
+      this.styleEl.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
+    }
   }
 
   private getStorageKey(): string {
@@ -133,10 +148,8 @@ class DeployLogWidget {
       if (wc) {
         if (wc.position) this.config.position = wc.position
         if (wc.theme) this.config.theme = wc.theme
-        if (wc.accent_color) this.config.accentColor = wc.accent_color
-        if (this.styleEl) {
-          this.styleEl.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
-        }
+        if (wc.accent_color) this.config.accentColor = normalizeAccent(wc.accent_color)
+        this.applyStyles()
       }
 
       this.renderTrigger()
