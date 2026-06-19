@@ -12,7 +12,7 @@ const DEFAULT_ACCENT = '#18181b'
 // malformed values from data-accent or an unexpected API payload.
 const SAFE_ACCENT_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
 
-function normalizeAccent(input: string | null | undefined): string {
+export function normalizeAccent(input: string | null | undefined): string {
   const v = input?.trim()
   return v && SAFE_ACCENT_RE.test(v) ? v : DEFAULT_ACCENT
 }
@@ -20,6 +20,13 @@ function normalizeAccent(input: string | null | undefined): string {
 // Known entry types (must match the dl-type-* classes in styles.ts). Used to
 // gate entry_type before it's placed in a class name.
 const KNOWN_ENTRY_TYPES = new Set(['feature', 'fix', 'improvement', 'breaking', 'announcement'])
+
+// Escape text for safe interpolation into innerHTML (element-content context).
+export function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
 
 function init() {
   const script = document.currentScript as HTMLScriptElement | null
@@ -230,7 +237,7 @@ class DeployLogWidget {
     const header = document.createElement('div')
     header.className = 'dl-header'
     header.innerHTML = `
-      <span>${this.escapeHtml(this.data.project.name)} Changelog</span>
+      <span>${escapeHtml(this.data.project.name)} Changelog</span>
       <button class="dl-close" aria-label="Close changelog" type="button">&times;</button>
     `
     header.querySelector('.dl-close')!.addEventListener('click', () => this.close())
@@ -293,12 +300,12 @@ class DeployLogWidget {
       const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type)
         ? ` dl-type-${entry.entry_type}`
         : ''
-      typeBadge = `<span class="dl-entry-type${typeClass}">${this.escapeHtml(entry.entry_type)}</span>`
+      typeBadge = `<span class="dl-entry-type${typeClass}">${escapeHtml(entry.entry_type)}</span>`
     }
 
     let versionBadge = ''
     if (entry.version) {
-      versionBadge = `<span class="dl-entry-version">v${this.escapeHtml(entry.version)}</span>`
+      versionBadge = `<span class="dl-entry-version">v${escapeHtml(entry.version)}</span>`
     }
 
     const date = new Date(entry.published_at).toLocaleDateString(undefined, {
@@ -309,7 +316,7 @@ class DeployLogWidget {
 
     el.innerHTML = `
       <div class="dl-entry-header">
-        <span class="dl-entry-title">${this.escapeHtml(entry.title)}</span>
+        <span class="dl-entry-title">${escapeHtml(entry.title)}</span>
         ${typeBadge}
         ${versionBadge}
       </div>
@@ -400,11 +407,6 @@ class DeployLogWidget {
     })
   }
 
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div')
-    div.textContent = text
-    return div.innerHTML
-  }
 }
 
 // Auto-initialize when script loads

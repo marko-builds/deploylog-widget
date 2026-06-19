@@ -9,10 +9,14 @@
     "build:watch": "esbuild src/widget.ts --bundle --format=iife --outfile=dist/widget.js --watch",
     "dev": "esbuild src/widget.ts --bundle --format=iife --outfile=dev/widget.js --servedir=dev --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src/"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "typescript": "^5.8.0"
+    "jsdom": "^29.1.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.9"
   }
 }
