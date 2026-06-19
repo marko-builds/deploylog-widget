@@ -17,6 +17,10 @@ function normalizeAccent(input: string | null | undefined): string {
   return v && SAFE_ACCENT_RE.test(v) ? v : DEFAULT_ACCENT
 }
 
+// Known entry types (must match the dl-type-* classes in styles.ts). Used to
+// gate entry_type before it's placed in a class name.
+const KNOWN_ENTRY_TYPES = new Set(['feature', 'fix', 'improvement', 'breaking', 'announcement'])
+
 function init() {
   const script = document.currentScript as HTMLScriptElement | null
   if (!script) return
@@ -140,6 +144,13 @@ class DeployLogWidget {
       const json = await res.json()
       this.data = json.data
 
+      // Defend the host page: a malformed 200 body must not throw later in
+      // open() when we read project/entries.
+      if (!this.data || !Array.isArray(this.data.entries) || !this.data.project) {
+        this.data = null
+        return
+      }
+
       // Apply the dashboard-saved appearance over the script defaults, then
       // re-render the parts that depend on it: styles (theme + accent) and the
       // trigger (position). "Widget Appearance" in the dashboard is the source
@@ -219,7 +230,7 @@ class DeployLogWidget {
     const header = document.createElement('div')
     header.className = 'dl-header'
     header.innerHTML = `
-      <span>${this.data.project.name} Changelog</span>
+      <span>${this.escapeHtml(this.data.project.name)} Changelog</span>
       <button class="dl-close" aria-label="Close changelog" type="button">&times;</button>
     `
     header.querySelector('.dl-close')!.addEventListener('click', () => this.close())
@@ -277,12 +288,17 @@ class DeployLogWidget {
 
     let typeBadge = ''
     if (entry.entry_type) {
-      typeBadge = `<span class="dl-entry-type dl-type-${entry.entry_type}">${entry.entry_type}</span>`
+      // Only trust the type in a class name if it's a known value; always escape
+      // the visible text — these fields aren't markdown-sanitized server-side.
+      const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type)
+        ? ` dl-type-${entry.entry_type}`
+        : ''
+      typeBadge = `<span class="dl-entry-type${typeClass}">${this.escapeHtml(entry.entry_type)}</span>`
     }
 
     let versionBadge = ''
     if (entry.version) {
-      versionBadge = `<span class="dl-entry-version">v${entry.version}</span>`
+      versionBadge = `<span class="dl-entry-version">v${this.escapeHtml(entry.version)}</span>`
     }
 
     const date = new Date(entry.published_at).toLocaleDateString(undefined, {
