@@ -3,6 +3,19 @@ import type { WidgetConfig, WidgetData, Entry } from './types'
 
 const DEFAULT_API_URL = 'https://deploylog.dev'
 const STORAGE_KEY_PREFIX = 'deploylog_seen_'
+// Matches WIDGET_CONFIG_DEFAULT.accent_color in the dashboard. Treated as
+// "no custom accent" so entry titles follow the theme by default.
+const DEFAULT_ACCENT = '#18181b'
+
+// Accent flows into generated <style> text, so constrain it to a hex color
+// (what the dashboard produces) before use — guards against CSS injection or
+// malformed values from data-accent or an unexpected API payload.
+const SAFE_ACCENT_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
+
+function normalizeAccent(input: string | null | undefined): string {
+  const v = input?.trim()
+  return v && SAFE_ACCENT_RE.test(v) ? v : DEFAULT_ACCENT
+}
 
 function init() {
   const script = document.currentScript as HTMLScriptElement | null
@@ -18,6 +31,7 @@ function init() {
     projectId,
     position: (script.getAttribute('data-position') as WidgetConfig['position']) ?? 'bottom-right',
     theme: (script.getAttribute('data-theme') as WidgetConfig['theme']) ?? 'auto',
+    accentColor: normalizeAccent(script.getAttribute('data-accent')),
     apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
   }
 
@@ -28,6 +42,7 @@ function init() {
 class DeployLogWidget {
   private config: WidgetConfig
   private shadow: ShadowRoot | null = null
+  private styleEl: HTMLStyleElement | null = null
   private container: HTMLElement | null = null
   private isOpen = false
   private data: WidgetData | null = null
@@ -47,16 +62,16 @@ class DeployLogWidget {
     this.shadow = this.container.attachShadow({ mode: 'closed' })
 
     // Add styles
-    const style = document.createElement('style')
-    style.textContent = getStyles(this.resolveTheme())
-    this.shadow.appendChild(style)
+    this.styleEl = document.createElement('style')
+    this.applyStyles()
+    this.shadow.appendChild(this.styleEl)
 
-    // Listen for system theme changes
-    if (this.config.theme === 'auto') {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        style.textContent = getStyles(this.resolveTheme())
-      })
-    }
+    // Re-resolve an 'auto' theme on OS changes. Registered unconditionally so it
+    // still applies if the dashboard config later switches the theme to 'auto';
+    // the handler is a no-op for fixed light/dark themes.
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (this.config.theme === 'auto') this.applyStyles()
+    })
 
     // Render trigger button
     this.renderTrigger()
@@ -74,6 +89,18 @@ class DeployLogWidget {
     if (this.config.theme === 'light') return 'light'
     if (this.config.theme === 'dark') return 'dark'
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+
+  // The neutral default means "no custom accent" — let titles follow the theme.
+  private accentForStyles(): string | undefined {
+    const accent = this.config.accentColor
+    return accent && accent.toLowerCase() !== DEFAULT_ACCENT ? accent : undefined
+  }
+
+  private applyStyles() {
+    if (this.styleEl) {
+      this.styleEl.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
+    }
   }
 
   private getStorageKey(): string {
@@ -112,6 +139,19 @@ class DeployLogWidget {
 
       const json = await res.json()
       this.data = json.data
+
+      // Apply the dashboard-saved appearance over the script defaults, then
+      // re-render the parts that depend on it: styles (theme + accent) and the
+      // trigger (position). "Widget Appearance" in the dashboard is the source
+      // of truth, so it wins over the script's data-attributes.
+      const wc = this.data?.widget_config
+      if (wc) {
+        if (wc.position) this.config.position = wc.position
+        if (wc.theme) this.config.theme = wc.theme
+        if (wc.accent_color) this.config.accentColor = normalizeAccent(wc.accent_color)
+        this.applyStyles()
+      }
+
       this.renderTrigger()
     } catch {
       // Silently fail — widget should never break host site
