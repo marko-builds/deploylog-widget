@@ -3,6 +3,9 @@ import type { WidgetConfig, WidgetData, Entry } from './types'
 
 const DEFAULT_API_URL = 'https://deploylog.dev'
 const STORAGE_KEY_PREFIX = 'deploylog_seen_'
+// Matches WIDGET_CONFIG_DEFAULT.accent_color in the dashboard. Treated as
+// "no custom accent" so entry titles follow the theme by default.
+const DEFAULT_ACCENT = '#18181b'
 
 function init() {
   const script = document.currentScript as HTMLScriptElement | null
@@ -18,6 +21,7 @@ function init() {
     projectId,
     position: (script.getAttribute('data-position') as WidgetConfig['position']) ?? 'bottom-right',
     theme: (script.getAttribute('data-theme') as WidgetConfig['theme']) ?? 'auto',
+    accentColor: script.getAttribute('data-accent') ?? DEFAULT_ACCENT,
     apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
   }
 
@@ -28,6 +32,7 @@ function init() {
 class DeployLogWidget {
   private config: WidgetConfig
   private shadow: ShadowRoot | null = null
+  private styleEl: HTMLStyleElement | null = null
   private container: HTMLElement | null = null
   private isOpen = false
   private data: WidgetData | null = null
@@ -48,13 +53,14 @@ class DeployLogWidget {
 
     // Add styles
     const style = document.createElement('style')
-    style.textContent = getStyles(this.resolveTheme())
+    this.styleEl = style
+    style.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
     this.shadow.appendChild(style)
 
     // Listen for system theme changes
     if (this.config.theme === 'auto') {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        style.textContent = getStyles(this.resolveTheme())
+        style.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
       })
     }
 
@@ -74,6 +80,12 @@ class DeployLogWidget {
     if (this.config.theme === 'light') return 'light'
     if (this.config.theme === 'dark') return 'dark'
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+
+  // The neutral default means "no custom accent" — let titles follow the theme.
+  private accentForStyles(): string | undefined {
+    const accent = this.config.accentColor
+    return accent && accent.toLowerCase() !== DEFAULT_ACCENT ? accent : undefined
   }
 
   private getStorageKey(): string {
@@ -112,6 +124,21 @@ class DeployLogWidget {
 
       const json = await res.json()
       this.data = json.data
+
+      // Apply the dashboard-saved appearance over the script defaults, then
+      // re-render the parts that depend on it: styles (theme + accent) and the
+      // trigger (position). "Widget Appearance" in the dashboard is the source
+      // of truth, so it wins over the script's data-attributes.
+      const wc = this.data?.widget_config
+      if (wc) {
+        if (wc.position) this.config.position = wc.position
+        if (wc.theme) this.config.theme = wc.theme
+        if (wc.accent_color) this.config.accentColor = wc.accent_color
+        if (this.styleEl) {
+          this.styleEl.textContent = getStyles(this.resolveTheme(), this.accentForStyles())
+        }
+      }
+
       this.renderTrigger()
     } catch {
       // Silently fail — widget should never break host site

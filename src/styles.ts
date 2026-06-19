@@ -1,4 +1,7 @@
-export function getStyles(theme: 'light' | 'dark'): string {
+// `accent` is the dashboard-configured accent color. It is only passed when the
+// user has set a non-default color (the neutral default is treated as "follow
+// the theme"), so entry titles stay readable in both light and dark by default.
+export function getStyles(theme: 'light' | 'dark', accent?: string): string {
   const bg = theme === 'dark' ? '#18181b' : '#ffffff'
   const bgHover = theme === 'dark' ? '#27272a' : '#f4f4f5'
   const border = theme === 'dark' ? '#3f3f46' : '#e4e4e7'
@@ -13,6 +16,7 @@ export function getStyles(theme: 'light' | 'dark'): string {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       color: ${text};
+      ${accent ? `--dl-accent: ${accent};` : ''}
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -135,6 +139,9 @@ export function getStyles(theme: 'light' | 'dark'): string {
     .dl-entry-title {
       font-weight: 600;
       font-size: 13px;
+      /* Uses the configured accent when set; falls back to the theme text
+         color so default (un-customized) widgets stay readable in dark mode. */
+      color: var(--dl-accent, ${text});
     }
 
     .dl-entry-type {
