@@ -1,6 +1,5 @@
 name: Publish to DeployLog
 on:
-    workflow_dispatch: # manual "Run workflow" button — best for a clean, repeatable take
     release:
         types: [published] # the real trigger the product sells
 jobs:
