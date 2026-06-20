@@ -10,5 +10,5 @@ jobs:
             - uses: deploylogdev/action@v1
               with:
                   api-key: ${{ secrets.DEPLOYLOG_API_KEY }}
-                  project: your-project-slug
+                  project: 1bcdf792-e1bf-4cbf-bf2b-65afbc875582
                   notify-subscribers: true
