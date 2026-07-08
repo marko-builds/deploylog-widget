@@ -1,6 +1,6 @@
 # 02 — Widget crash-safety pass: head-embed, Safari-13, double-init, currentScript (A1)
 
-**Status:** ready-for-agent · **Type:** AFK · **Lane:** deploylog-widget
+**Status:** done · **Type:** AFK · **Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
 **Blocked by:** issues/01-widget-ci-workflow.md
 **Verification:** contract A1.2-4 — red-first tests: head-embed does not throw, Safari-13-class env still mounts, double-embed yields one instance. Signal: `vitest run` + esbuild build with an explicit target.

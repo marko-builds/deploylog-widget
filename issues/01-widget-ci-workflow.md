@@ -1,6 +1,6 @@
 # 01 — Widget CI workflow (B8)
 
-**Status:** ready-for-agent · **Type:** AFK · **Lane:** deploylog-widget
+**Status:** done · **Type:** AFK · **Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
 **Blocked by:** None — can start immediately (do first: makes 02-04 tests load-bearing)
 **Verification:** contract B8.1 — a PR that breaks any widget test fails the required CI check. Signal: the workflow runs typecheck + vitest and is a required status.
