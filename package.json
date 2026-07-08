@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/widget.ts --bundle --minify --format=iife --outfile=dist/widget.js",
+    "build": "esbuild src/widget.ts --bundle --minify --format=iife --target=safari13 --outfile=dist/widget.js",
     "build:watch": "esbuild src/widget.ts --bundle --format=iife --outfile=dist/widget.js --watch",
     "dev": "esbuild src/widget.ts --bundle --format=iife --outfile=dev/widget.js --servedir=dev --watch",
     "typecheck": "tsc --noEmit",

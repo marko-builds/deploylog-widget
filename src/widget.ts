@@ -28,9 +28,16 @@ export function escapeHtml(text: string): string {
   return div.innerHTML
 }
 
-function init() {
+export function init() {
   const script = document.currentScript as HTMLScriptElement | null
-  if (!script) return
+  if (!script) {
+    console.warn('[DeployLog] Widget requires a classic script tag (document.currentScript is null)')
+    return
+  }
+
+  // Double-init guard: a second embed execution (SPA navigation, GTM re-fire) is a no-op
+  if ((window as any).__deploylogMounted) return
+  ;(window as any).__deploylogMounted = true
 
   const projectId = script.getAttribute('data-project')
   if (!projectId) {
@@ -64,36 +71,50 @@ class DeployLogWidget {
   }
 
   mount() {
-    // Create host element
-    this.container = document.createElement('div')
-    this.container.id = 'deploylog-widget'
-    document.body.appendChild(this.container)
+    const doMount = () => {
+      // Create host element
+      this.container = document.createElement('div')
+      this.container.id = 'deploylog-widget'
+      document.body.appendChild(this.container)
 
-    // Shadow DOM for style isolation
-    this.shadow = this.container.attachShadow({ mode: 'closed' })
+      // Shadow DOM for style isolation
+      this.shadow = this.container.attachShadow({ mode: 'closed' })
 
-    // Add styles
-    this.styleEl = document.createElement('style')
-    this.applyStyles()
-    this.shadow.appendChild(this.styleEl)
+      // Add styles
+      this.styleEl = document.createElement('style')
+      this.applyStyles()
+      this.shadow.appendChild(this.styleEl)
 
-    // Re-resolve an 'auto' theme on OS changes. Registered unconditionally so it
-    // still applies if the dashboard config later switches the theme to 'auto';
-    // the handler is a no-op for fixed light/dark themes.
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (this.config.theme === 'auto') this.applyStyles()
-    })
+      // Re-resolve an 'auto' theme on OS changes. Registered unconditionally so it
+      // still applies if the dashboard config later switches the theme to 'auto';
+      // the handler is a no-op for fixed light/dark themes.
+      // Safari 13.0 lacks MediaQueryList.addEventListener — fall back to addListener.
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      const themeListener = () => { if (this.config.theme === 'auto') this.applyStyles() }
+      if (typeof mq.addEventListener === 'function') {
+        mq.addEventListener('change', themeListener)
+      } else if (typeof (mq as any).addListener === 'function') {
+        ;(mq as any).addListener(themeListener)
+      }
 
-    // Render trigger button
-    this.renderTrigger()
+      // Render trigger button
+      this.renderTrigger()
 
-    // Fetch data
-    this.fetchData()
+      // Fetch data
+      this.fetchData()
 
-    // Close on Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen) this.close()
-    })
+      // Close on Escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.isOpen) this.close()
+      })
+    }
+
+    // Guard: defer body.appendChild when the DOM isn't ready yet (head embed without defer)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', doMount, { once: true })
+    } else {
+      doMount()
+    }
   }
 
   private resolveTheme(): 'light' | 'dark' {
@@ -409,5 +430,5 @@ class DeployLogWidget {
 
 }
 
-// Auto-initialize when script loads
-init()
+// Auto-initialize when script loads; fail-quiet per the never-break-host contract
+try { init() } catch { }

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { normalizeAccent, escapeHtml } from './widget'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { normalizeAccent, escapeHtml, init } from './widget'
 
 const DEFAULT_ACCENT = '#18181b'
 
@@ -52,5 +52,102 @@ describe('escapeHtml', () => {
   it('passes plain text through unchanged', () => {
     expect(escapeHtml('feature')).toBe('feature')
     expect(escapeHtml('1.2.0')).toBe('1.2.0')
+  })
+})
+
+// --- Crash safety (A1) ---
+
+function makeScript(projectId = 'test-project'): HTMLScriptElement {
+  const s = document.createElement('script')
+  s.setAttribute('data-project', projectId)
+  return s
+}
+
+function mockCurrentScript(script: HTMLScriptElement | null) {
+  Object.defineProperty(document, 'currentScript', {
+    get: () => script,
+    configurable: true,
+  })
+}
+
+describe('crash safety', () => {
+  beforeEach(() => {
+    // jsdom doesn't implement matchMedia; provide a full stub by default
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeListener: vi.fn(),
+        addListener: vi.fn(),
+      })),
+    })
+    // Reset double-init guard and DOM between tests
+    delete (window as any).__deploylogMounted
+    document.getElementById('deploylog-widget')?.remove()
+    mockCurrentScript(null)
+  })
+
+  afterEach(() => {
+    delete (window as any).__deploylogMounted
+    document.getElementById('deploylog-widget')?.remove()
+    mockCurrentScript(null)
+    vi.restoreAllMocks()
+  })
+
+  // A1 / #8: null currentScript must warn, not silently return
+  it('warns when document.currentScript is null (not a silent return)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    init()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/\[DeployLog\].*currentScript/i))
+  })
+
+  // A1 / #3: double-init yields exactly one trigger and one container
+  it('second init() call is a no-op (exactly one #deploylog-widget)', () => {
+    mockCurrentScript(makeScript())
+    init()
+    init()
+    expect(document.querySelectorAll('#deploylog-widget')).toHaveLength(1)
+  })
+
+  // A1 / #2: head-embed defers mount until DOMContentLoaded; no throw
+  it('defers mount when readyState is loading, mounts on DOMContentLoaded', () => {
+    Object.defineProperty(document, 'readyState', {
+      get: () => 'loading' as DocumentReadyState,
+      configurable: true,
+    })
+    mockCurrentScript(makeScript())
+    expect(() => init()).not.toThrow()
+    // container must not exist before DOMContentLoaded
+    expect(document.getElementById('deploylog-widget')).toBeNull()
+
+    document.dispatchEvent(new Event('DOMContentLoaded'))
+
+    expect(document.getElementById('deploylog-widget')).not.toBeNull()
+
+    // restore readyState
+    Object.defineProperty(document, 'readyState', {
+      get: () => 'complete' as DocumentReadyState,
+      configurable: true,
+    })
+  })
+
+  // A1 / #9: Safari-13 class (no matchMedia.addEventListener) must not throw; uses addListener fallback
+  it('does not throw on Safari-13-class env (no matchMedia.addEventListener); calls addListener', () => {
+    const addListenerFn = vi.fn()
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: false,
+        // no addEventListener — simulates Safari 13.0
+        addListener: addListenerFn,
+        removeListener: vi.fn(),
+      })),
+    })
+    mockCurrentScript(makeScript())
+    expect(() => init()).not.toThrow()
+    expect(addListenerFn).toHaveBeenCalled()
   })
 })
