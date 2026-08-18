@@ -1,6 +1,8 @@
 # 03 — Widget pure decision core + position/accent drift fix (B6 + A1.5)
 
-**Status:** ready-for-agent · **Type:** AFK · **Lane:** deploylog-widget
+**Status:** ready-for-agent
+**Type:** AFK
+**Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
 **Blocked by:** issues/01-widget-ci-workflow.md (done) · **Human gate: SETTLED 2026-08-18 by Marko** — trim the README to the two real values. No open human gate remains; the slice is mechanical AFK.
 **Verification:** contract B6.1-4, A1.5 — data-in/data-out unit tests for merge/unread/parse; position validator rejects/normalizes unknown values. Signal: `vitest run`.
