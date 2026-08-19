@@ -48,10 +48,22 @@ export function mergeConfig(
       ? normalizeAccent(wc.accent_color)
       : scriptConfig.accentColor
 
+  // Gate through the same known-value sets parseConfig uses. `??` let any non-null
+  // dashboard value through — including '' and an unimplemented 'top-right' — which
+  // clobbered a valid script-tag value and re-opened the drift this slice closed.
+  // parseWidgetData casts the API body without validating widget_config, so this is
+  // the only place the dashboard side is checked.
+  const position = KNOWN_POSITIONS.has(wc.position as WidgetConfig['position'])
+    ? (wc.position as WidgetConfig['position'])
+    : scriptConfig.position
+  const theme = KNOWN_THEMES.has(wc.theme as WidgetConfig['theme'])
+    ? (wc.theme as WidgetConfig['theme'])
+    : scriptConfig.theme
+
   return {
     ...scriptConfig,
-    position: wc.position ?? scriptConfig.position,
-    theme: wc.theme ?? scriptConfig.theme,
+    position,
+    theme,
     accentColor,
   }
 }
@@ -114,7 +126,7 @@ export function renderEntryHTML(entry: Entry): string {
 // widget can never break the host page on a fetch failure.
 export async function fetchWidgetData(apiUrl: string, projectId: string): Promise<WidgetData | null> {
   try {
-    const res = await fetch(`${apiUrl}/api/widget-data?projectId=${projectId}`)
+    const res = await fetch(`${apiUrl}/api/widget-data?projectId=${encodeURIComponent(projectId)}`)
     if (!res.ok) return null
     const json = await res.json()
     return parseWidgetData(json)

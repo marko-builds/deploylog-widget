@@ -132,6 +132,35 @@ describe('mergeConfig', () => {
     expect(merged.projectId).toBe('abc')
     expect(merged.apiUrl).toBe('https://x.example')
   })
+
+  // The dashboard side is never validated by parseWidgetData, so mergeConfig is the
+  // only gate on it. An empty string is not null, so `??` let it through and it
+  // clobbered a valid script-tag value.
+  it('keeps the script position when the dashboard sends an empty string', () => {
+    const script = makeWidgetConfig({ position: 'bottom-left' })
+    const merged = mergeConfig(script, { position: '' as WidgetConfig['position'] })
+    expect(merged.position).toBe('bottom-left')
+  })
+
+  it('keeps the script theme when the dashboard sends an empty string', () => {
+    const script = makeWidgetConfig({ theme: 'dark' })
+    const merged = mergeConfig(script, { theme: '' as WidgetConfig['theme'] })
+    expect(merged.theme).toBe('dark')
+  })
+
+  // parseConfig rejects 'top-right' on the script side; the dashboard side must
+  // reject it too, or the unimplemented position reaches getStyles anyway.
+  it('keeps the script position when the dashboard sends an unimplemented one', () => {
+    const script = makeWidgetConfig({ position: 'bottom-left' })
+    const merged = mergeConfig(script, { position: 'top-right' as WidgetConfig['position'] })
+    expect(merged.position).toBe('bottom-left')
+  })
+
+  it('keeps the script theme when the dashboard sends an unknown one', () => {
+    const script = makeWidgetConfig({ theme: 'light' })
+    const merged = mergeConfig(script, { theme: 'neon' as WidgetConfig['theme'] })
+    expect(merged.theme).toBe('light')
+  })
 })
 
 describe('unreadCount', () => {
@@ -300,6 +329,26 @@ describe('fetchWidgetData', () => {
     )
     const result = await fetchWidgetData('https://deploylog.dev', 'proj-1')
     expect(result).toEqual(validBody.data)
+  })
+
+  // Without these two, every test below passes against an implementation that
+  // ignores both parameters — URL construction is half of what this seam owns.
+  it('builds the widget-data URL from apiUrl and projectId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => validBody })
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchWidgetData('https://deploylog.dev', 'proj-1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://deploylog.dev/api/widget-data?projectId=proj-1',
+    )
+  })
+
+  it('encodes a projectId that would otherwise corrupt the query string', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => validBody })
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchWidgetData('https://deploylog.dev', 'a&b c#d')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://deploylog.dev/api/widget-data?projectId=a%26b%20c%23d',
+    )
   })
 
   it('returns null on a non-200 response', async () => {
