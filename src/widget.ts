@@ -68,12 +68,26 @@ export function mergeConfig(
   }
 }
 
-// entries[0] is assumed latest; unread = strictly after lastSeen by ISO-string
-// chronological comparison. A null lastSeen (never opened) counts everything.
+// entries[0] is assumed latest; unread = strictly after lastSeen. A null lastSeen
+// (never opened) counts everything.
+//
+// Compared as INSTANTS, not as strings. Both sides come from the API, but not
+// necessarily in the same textual form: setLastSeenTimestamp stores whatever the
+// server sent at the time, so a later payload that drops milliseconds or uses an
+// offset instead of Z compares wrong lexically — '…T00:00:00Z' > '…T00:00:00.000Z'
+// because 'Z' > '.', which leaves an already-seen entry unread forever. Falls back
+// to the raw string comparison only when either side is unparseable, so junk input
+// behaves exactly as it did before.
 export function unreadCount(entries: Entry[], lastSeen: string | null): number {
   if (entries.length === 0) return 0
   if (lastSeen === null) return entries.length
-  return entries.filter((e) => e.published_at > lastSeen).length
+
+  const seenAt = Date.parse(lastSeen)
+  return entries.filter((e) => {
+    const publishedAt = Date.parse(e.published_at)
+    if (Number.isNaN(publishedAt) || Number.isNaN(seenAt)) return e.published_at > lastSeen
+    return publishedAt > seenAt
+  }).length
 }
 
 // A malformed 200 body (missing/wrong-shaped fields, or not even an object)

@@ -169,12 +169,38 @@ describe('unreadCount', () => {
     expect(unreadCount(entries, null)).toBe(2)
   })
 
-  it('counts entries published after lastSeen using ISO-string comparison', () => {
+  it('counts entries published after lastSeen', () => {
     const entries = [
       makeEntry({ id: 'a', published_at: '2026-03-01T00:00:00.000Z' }),
       makeEntry({ id: 'b', published_at: '2026-01-01T00:00:00.000Z' }),
     ]
     expect(unreadCount(entries, '2026-02-01T00:00:00.000Z')).toBe(1)
+  })
+
+  // The three cases a lexical `>` gets wrong. lastSeen is whatever the server sent
+  // when the panel was last opened, so it need not match the precision or offset of
+  // a later payload — and each of these compares to the SAME instant.
+  it('treats a millisecond-less timestamp as already seen', () => {
+    // '2026-03-01T00:00:00Z' > '2026-03-01T00:00:00.000Z' lexically, because 'Z' > '.'
+    const entries = [makeEntry({ id: 'a', published_at: '2026-03-01T00:00:00Z' })]
+    expect(unreadCount(entries, '2026-03-01T00:00:00.000Z')).toBe(0)
+  })
+
+  it('treats an offset timestamp as already seen when it is the same instant', () => {
+    // '2026-03-01T02:00:00+02:00' > '2026-03-01T00:00:00.000Z' lexically, at the hour digit
+    const entries = [makeEntry({ id: 'a', published_at: '2026-03-01T02:00:00+02:00' })]
+    expect(unreadCount(entries, '2026-03-01T00:00:00.000Z')).toBe(0)
+  })
+
+  it('still counts an offset timestamp that really is later', () => {
+    const entries = [makeEntry({ id: 'a', published_at: '2026-03-01T03:00:00+02:00' })]
+    expect(unreadCount(entries, '2026-03-01T00:00:00.000Z')).toBe(1)
+  })
+
+  it('falls back to string comparison when a timestamp is unparseable', () => {
+    const entries = [makeEntry({ id: 'a', published_at: 'not-a-date' })]
+    expect(unreadCount(entries, '2026-03-01T00:00:00.000Z')).toBe(1)
+    expect(unreadCount(entries, 'zzz')).toBe(0)
   })
 
   it('returns 0 when every entry is at or before lastSeen', () => {
