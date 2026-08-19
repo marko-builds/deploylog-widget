@@ -12,6 +12,9 @@ export interface Entry {
   slug: string
   entry_type: string | null
   version: string | null
+  // Server-sanitized HTML (deploylog issue 37) — rendered raw via innerHTML, never
+  // re-escaped or run through a client-side sanitizer like DOMPurify (kept under the
+  // widget's <15KB bundle budget). This field is not safe to render if that contract changes.
   body_html: string
   published_at: string
 }

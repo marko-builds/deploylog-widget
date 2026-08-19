@@ -7,6 +7,8 @@ import {
   unreadCount,
   parseWidgetData,
   parseConfig,
+  renderEntryHTML,
+  fetchWidgetData,
 } from './widget'
 import type { WidgetConfig, Entry } from './types'
 
@@ -236,6 +238,104 @@ describe('parseConfig', () => {
     const script = document.createElement('script')
     script.setAttribute('data-api-url', 'https://staging.example.com')
     expect(parseConfig(script, 'proj-1').apiUrl).toBe('https://staging.example.com')
+  })
+})
+
+describe('renderEntryHTML', () => {
+  it('escapes a hostile title, entry_type, and version (no live element on parse)', () => {
+    const entry = makeEntry({
+      title: '<img src=x onerror=alert(1)>',
+      entry_type: 'feature',
+      version: '<script>alert(2)</script>',
+    })
+    const html = renderEntryHTML(entry)
+    const host = document.createElement('div')
+    host.innerHTML = html
+    expect(host.querySelector('img')).toBeNull()
+    expect(host.querySelector('script')).toBeNull()
+    expect(html).toContain('&lt;img')
+    expect(html).toContain('&lt;script&gt;')
+  })
+
+  it('passes body_html through raw (server-sanitized contract)', () => {
+    const entry = makeEntry({ body_html: '<p>Release notes <strong>here</strong></p>' })
+    const html = renderEntryHTML(entry)
+    expect(html).toContain('<p>Release notes <strong>here</strong></p>')
+  })
+
+  it('applies the dl-type-* class for a known entry_type', () => {
+    const html = renderEntryHTML(makeEntry({ entry_type: 'fix' }))
+    const host = document.createElement('div')
+    host.innerHTML = html
+    expect(host.querySelector('.dl-type-fix')).not.toBeNull()
+  })
+
+  it('gates an unknown entry_type: no dl-type-* class, but the escaped text still shows', () => {
+    const html = renderEntryHTML(makeEntry({ entry_type: 'sponsored-content' }))
+    const host = document.createElement('div')
+    host.innerHTML = html
+    expect(host.querySelector('[class*="dl-type-"]')).toBeNull()
+    expect(html).toContain('sponsored-content')
+  })
+
+  it('omits the version badge when version is null', () => {
+    const html = renderEntryHTML(makeEntry({ version: null }))
+    expect(html).not.toContain('dl-entry-version')
+  })
+})
+
+describe('fetchWidgetData', () => {
+  const validBody = {
+    data: { project: { name: 'P', slug: 'p' }, entries: [], plan: 'free' },
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns parsed data on a 200 with a well-formed body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => validBody }),
+    )
+    const result = await fetchWidgetData('https://deploylog.dev', 'proj-1')
+    expect(result).toEqual(validBody.data)
+  })
+
+  it('returns null on a non-200 response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: async () => validBody }),
+    )
+    const result = await fetchWidgetData('https://deploylog.dev', 'proj-1')
+    expect(result).toBeNull()
+  })
+
+  it('returns null on a malformed 200 body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { not: 'valid' } }) }),
+    )
+    const result = await fetchWidgetData('https://deploylog.dev', 'proj-1')
+    expect(result).toBeNull()
+  })
+
+  it('returns null instead of throwing when fetch itself rejects', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    await expect(fetchWidgetData('https://deploylog.dev', 'proj-1')).resolves.toBeNull()
+  })
+
+  it('returns null instead of throwing when res.json() rejects', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => {
+          throw new Error('bad json')
+        },
+      }),
+    )
+    await expect(fetchWidgetData('https://deploylog.dev', 'proj-1')).resolves.toBeNull()
   })
 })
 

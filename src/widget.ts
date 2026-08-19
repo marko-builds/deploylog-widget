@@ -76,6 +76,53 @@ export function parseWidgetData(json: unknown): WidgetData | null {
   return candidate as WidgetData
 }
 
+// Pure render of a single entry's innerHTML. title/entry_type/version are escaped;
+// body_html is passed through raw on the server-sanitized contract documented on
+// WidgetData['entries'][number]['body_html'] in types.ts. entry_type only drives a
+// class name when it's a known value — gated the same way parseConfig gates position/theme.
+export function renderEntryHTML(entry: Entry): string {
+  let typeBadge = ''
+  if (entry.entry_type) {
+    const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type) ? ` dl-type-${entry.entry_type}` : ''
+    typeBadge = `<span class="dl-entry-type${typeClass}">${escapeHtml(entry.entry_type)}</span>`
+  }
+
+  let versionBadge = ''
+  if (entry.version) {
+    versionBadge = `<span class="dl-entry-version">v${escapeHtml(entry.version)}</span>`
+  }
+
+  const date = new Date(entry.published_at).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  return `
+      <div class="dl-entry-header">
+        <span class="dl-entry-title">${escapeHtml(entry.title)}</span>
+        ${typeBadge}
+        ${versionBadge}
+      </div>
+      <div class="dl-entry-date">${date}</div>
+      <div class="dl-entry-body">${entry.body_html}</div>
+    `
+}
+
+// URL construction + res.ok gate + parseWidgetData. Never throws — a malformed body,
+// a non-200, a rejected fetch, or a rejected res.json() all normalize to null so the
+// widget can never break the host page on a fetch failure.
+export async function fetchWidgetData(apiUrl: string, projectId: string): Promise<WidgetData | null> {
+  try {
+    const res = await fetch(`${apiUrl}/api/widget-data?projectId=${projectId}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return parseWidgetData(json)
+  } catch {
+    return null
+  }
+}
+
 // Validates data-position/data-theme/data-accent against the sets the rest of
 // the widget actually implements, instead of `as`-casting an arbitrary string
 // through. An unsupported value (e.g. a top-* position) normalizes to the
@@ -225,16 +272,7 @@ class DeployLogWidget {
 
   private async fetchData() {
     try {
-      const res = await fetch(
-        `${this.config.apiUrl}/api/widget-data?projectId=${this.config.projectId}`,
-      )
-      if (!res.ok) return
-
-      const json = await res.json()
-
-      // Defend the host page: a malformed 200 body must not throw later in
-      // open() when we read project/entries.
-      this.data = parseWidgetData(json)
+      this.data = await fetchWidgetData(this.config.apiUrl, this.config.projectId)
       if (!this.data) return
 
       // Apply the dashboard-saved appearance over the script defaults, then
@@ -368,38 +406,7 @@ class DeployLogWidget {
   private renderEntry(entry: Entry): HTMLElement {
     const el = document.createElement('div')
     el.className = 'dl-entry'
-
-    let typeBadge = ''
-    if (entry.entry_type) {
-      // Only trust the type in a class name if it's a known value; always escape
-      // the visible text — these fields aren't markdown-sanitized server-side.
-      const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type)
-        ? ` dl-type-${entry.entry_type}`
-        : ''
-      typeBadge = `<span class="dl-entry-type${typeClass}">${escapeHtml(entry.entry_type)}</span>`
-    }
-
-    let versionBadge = ''
-    if (entry.version) {
-      versionBadge = `<span class="dl-entry-version">v${escapeHtml(entry.version)}</span>`
-    }
-
-    const date = new Date(entry.published_at).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-
-    el.innerHTML = `
-      <div class="dl-entry-header">
-        <span class="dl-entry-title">${escapeHtml(entry.title)}</span>
-        ${typeBadge}
-        ${versionBadge}
-      </div>
-      <div class="dl-entry-date">${date}</div>
-      <div class="dl-entry-body">${entry.body_html}</div>
-    `
-
+    el.innerHTML = renderEntryHTML(entry)
     return el
   }
 
