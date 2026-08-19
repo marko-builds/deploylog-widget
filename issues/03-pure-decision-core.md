@@ -1,6 +1,6 @@
 # 03 — Widget pure decision core + position/accent drift fix (B6 + A1.5)
 
-**Status:** ready-for-agent
+**Status:** done
 **Type:** AFK
 **Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md

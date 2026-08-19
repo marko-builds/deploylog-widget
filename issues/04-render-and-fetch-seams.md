@@ -1,6 +1,6 @@
 # 04 — renderEntryHTML + fetchWidgetData seams + hostile-input tests (B7)
 
-**Status:** ready-for-agent
+**Status:** done
 **Type:** AFK
 **Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
