@@ -21,11 +21,153 @@ export function normalizeAccent(input: string | null | undefined): string {
 // gate entry_type before it's placed in a class name.
 const KNOWN_ENTRY_TYPES = new Set(['feature', 'fix', 'improvement', 'breaking', 'announcement'])
 
+// The only two positions styles.ts/types.ts implement. Kept in sync with the README.
+const KNOWN_POSITIONS = new Set<WidgetConfig['position']>(['bottom-right', 'bottom-left'])
+const KNOWN_THEMES = new Set<WidgetConfig['theme']>(['auto', 'light', 'dark'])
+
 // Escape text for safe interpolation into innerHTML (element-content context).
 export function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+// Dashboard "Widget Appearance" wins over the script's data-attributes — except
+// accent_color, where the API always sends the DEFAULT_ACCENT placeholder when
+// the dashboard hasn't set a custom color. Treating that placeholder as "no
+// accent" (same rule accentForStyles already applies) keeps a script-tag
+// data-accent from being silently clobbered on every fetch.
+export function mergeConfig(
+  scriptConfig: WidgetConfig,
+  wc: WidgetData['widget_config'] | null | undefined,
+): WidgetConfig {
+  if (!wc) return scriptConfig
+
+  const accentColor =
+    wc.accent_color && normalizeAccent(wc.accent_color).toLowerCase() !== DEFAULT_ACCENT
+      ? normalizeAccent(wc.accent_color)
+      : scriptConfig.accentColor
+
+  // Gate through the same known-value sets parseConfig uses. `??` let any non-null
+  // dashboard value through — including '' and an unimplemented 'top-right' — which
+  // clobbered a valid script-tag value and re-opened the drift this slice closed.
+  // parseWidgetData casts the API body without validating widget_config, so this is
+  // the only place the dashboard side is checked.
+  const position = KNOWN_POSITIONS.has(wc.position as WidgetConfig['position'])
+    ? (wc.position as WidgetConfig['position'])
+    : scriptConfig.position
+  const theme = KNOWN_THEMES.has(wc.theme as WidgetConfig['theme'])
+    ? (wc.theme as WidgetConfig['theme'])
+    : scriptConfig.theme
+
+  return {
+    ...scriptConfig,
+    position,
+    theme,
+    accentColor,
+  }
+}
+
+// entries[0] is assumed latest; unread = strictly after lastSeen. A null lastSeen
+// (never opened) counts everything.
+//
+// Compared as INSTANTS, not as strings. Both sides come from the API, but not
+// necessarily in the same textual form: setLastSeenTimestamp stores whatever the
+// server sent at the time, so a later payload that drops milliseconds or uses an
+// offset instead of Z compares wrong lexically — '…T00:00:00Z' > '…T00:00:00.000Z'
+// because 'Z' > '.', which leaves an already-seen entry unread forever. Falls back
+// to the raw string comparison only when either side is unparseable, so junk input
+// behaves exactly as it did before.
+export function unreadCount(entries: Entry[], lastSeen: string | null): number {
+  if (entries.length === 0) return 0
+  if (lastSeen === null) return entries.length
+
+  const seenAt = Date.parse(lastSeen)
+  return entries.filter((e) => {
+    const publishedAt = Date.parse(e.published_at)
+    if (Number.isNaN(publishedAt) || Number.isNaN(seenAt)) return e.published_at > lastSeen
+    return publishedAt > seenAt
+  }).length
+}
+
+// A malformed 200 body (missing/wrong-shaped fields, or not even an object)
+// must not throw later when the widget reads project/entries — normalize it
+// to null instead.
+export function parseWidgetData(json: unknown): WidgetData | null {
+  if (!json || typeof json !== 'object') return null
+  const data = (json as { data?: unknown }).data
+  if (!data || typeof data !== 'object') return null
+  const candidate = data as Partial<WidgetData>
+  if (!Array.isArray(candidate.entries) || !candidate.project) return null
+  return candidate as WidgetData
+}
+
+// Pure render of a single entry's innerHTML. title/entry_type/version are escaped;
+// body_html is passed through raw on the server-sanitized contract documented on
+// WidgetData['entries'][number]['body_html'] in types.ts. entry_type only drives a
+// class name when it's a known value — gated the same way parseConfig gates position/theme.
+export function renderEntryHTML(entry: Entry): string {
+  let typeBadge = ''
+  if (entry.entry_type) {
+    const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type) ? ` dl-type-${entry.entry_type}` : ''
+    typeBadge = `<span class="dl-entry-type${typeClass}">${escapeHtml(entry.entry_type)}</span>`
+  }
+
+  let versionBadge = ''
+  if (entry.version) {
+    versionBadge = `<span class="dl-entry-version">v${escapeHtml(entry.version)}</span>`
+  }
+
+  const date = new Date(entry.published_at).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  return `
+      <div class="dl-entry-header">
+        <span class="dl-entry-title">${escapeHtml(entry.title)}</span>
+        ${typeBadge}
+        ${versionBadge}
+      </div>
+      <div class="dl-entry-date">${date}</div>
+      <div class="dl-entry-body">${entry.body_html}</div>
+    `
+}
+
+// URL construction + res.ok gate + parseWidgetData. Never throws — a malformed body,
+// a non-200, a rejected fetch, or a rejected res.json() all normalize to null so the
+// widget can never break the host page on a fetch failure.
+export async function fetchWidgetData(apiUrl: string, projectId: string): Promise<WidgetData | null> {
+  try {
+    const res = await fetch(`${apiUrl}/api/widget-data?projectId=${encodeURIComponent(projectId)}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return parseWidgetData(json)
+  } catch {
+    return null
+  }
+}
+
+// Validates data-position/data-theme/data-accent against the sets the rest of
+// the widget actually implements, instead of `as`-casting an arbitrary string
+// through. An unsupported value (e.g. a top-* position) normalizes to the
+// default rather than type-checking in and silently rendering somewhere else.
+export function parseConfig(script: HTMLScriptElement, projectId: string): WidgetConfig {
+  const position = script.getAttribute('data-position')
+  const theme = script.getAttribute('data-theme')
+
+  return {
+    projectId,
+    position: KNOWN_POSITIONS.has(position as WidgetConfig['position'])
+      ? (position as WidgetConfig['position'])
+      : 'bottom-right',
+    theme: KNOWN_THEMES.has(theme as WidgetConfig['theme'])
+      ? (theme as WidgetConfig['theme'])
+      : 'auto',
+    accentColor: normalizeAccent(script.getAttribute('data-accent')),
+    apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
+  }
 }
 
 export function init() {
@@ -45,13 +187,7 @@ export function init() {
     return
   }
 
-  const config: WidgetConfig = {
-    projectId,
-    position: (script.getAttribute('data-position') as WidgetConfig['position']) ?? 'bottom-right',
-    theme: (script.getAttribute('data-theme') as WidgetConfig['theme']) ?? 'auto',
-    accentColor: normalizeAccent(script.getAttribute('data-accent')),
-    apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
-  }
+  const config = parseConfig(script, projectId)
 
   const widget = new DeployLogWidget(config)
   widget.mount()
@@ -156,38 +292,21 @@ class DeployLogWidget {
   }
 
   private getUnreadCount(): number {
-    if (!this.data?.entries.length) return 0
-    const lastSeen = this.getLastSeenTimestamp()
-    if (!lastSeen) return this.data.entries.length
-    return this.data.entries.filter((e) => e.published_at > lastSeen).length
+    if (!this.data) return 0
+    return unreadCount(this.data.entries, this.getLastSeenTimestamp())
   }
 
   private async fetchData() {
     try {
-      const res = await fetch(
-        `${this.config.apiUrl}/api/widget-data?projectId=${this.config.projectId}`,
-      )
-      if (!res.ok) return
-
-      const json = await res.json()
-      this.data = json.data
-
-      // Defend the host page: a malformed 200 body must not throw later in
-      // open() when we read project/entries.
-      if (!this.data || !Array.isArray(this.data.entries) || !this.data.project) {
-        this.data = null
-        return
-      }
+      this.data = await fetchWidgetData(this.config.apiUrl, this.config.projectId)
+      if (!this.data) return
 
       // Apply the dashboard-saved appearance over the script defaults, then
       // re-render the parts that depend on it: styles (theme + accent) and the
       // trigger (position). "Widget Appearance" in the dashboard is the source
       // of truth, so it wins over the script's data-attributes.
-      const wc = this.data?.widget_config
-      if (wc) {
-        if (wc.position) this.config.position = wc.position
-        if (wc.theme) this.config.theme = wc.theme
-        if (wc.accent_color) this.config.accentColor = normalizeAccent(wc.accent_color)
+      if (this.data.widget_config) {
+        this.config = mergeConfig(this.config, this.data.widget_config)
         this.applyStyles()
       }
 
@@ -313,38 +432,7 @@ class DeployLogWidget {
   private renderEntry(entry: Entry): HTMLElement {
     const el = document.createElement('div')
     el.className = 'dl-entry'
-
-    let typeBadge = ''
-    if (entry.entry_type) {
-      // Only trust the type in a class name if it's a known value; always escape
-      // the visible text — these fields aren't markdown-sanitized server-side.
-      const typeClass = KNOWN_ENTRY_TYPES.has(entry.entry_type)
-        ? ` dl-type-${entry.entry_type}`
-        : ''
-      typeBadge = `<span class="dl-entry-type${typeClass}">${escapeHtml(entry.entry_type)}</span>`
-    }
-
-    let versionBadge = ''
-    if (entry.version) {
-      versionBadge = `<span class="dl-entry-version">v${escapeHtml(entry.version)}</span>`
-    }
-
-    const date = new Date(entry.published_at).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-
-    el.innerHTML = `
-      <div class="dl-entry-header">
-        <span class="dl-entry-title">${escapeHtml(entry.title)}</span>
-        ${typeBadge}
-        ${versionBadge}
-      </div>
-      <div class="dl-entry-date">${date}</div>
-      <div class="dl-entry-body">${entry.body_html}</div>
-    `
-
+    el.innerHTML = renderEntryHTML(entry)
     return el
   }
 

@@ -26,7 +26,7 @@ Configure via `data-` attributes on the script tag:
 | Attribute | Required | Default | Description |
 | --- | :--: | --- | --- |
 | `data-project` | ✅ | — | Your DeployLog project ID. |
-| `data-position` | | `bottom-right` | Widget position: `bottom-right`, `bottom-left`, `top-right`, `top-left`. |
+| `data-position` | | `bottom-right` | Widget position: `bottom-right` or `bottom-left`. An unsupported value falls back to the default. |
 | `data-theme` | | `auto` | `auto` (follows the OS), `light`, or `dark`. |
 | `data-api-url` | | `https://deploylog.dev` | Override the API base (self-hosted / staging). |
 

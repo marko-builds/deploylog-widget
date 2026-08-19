@@ -1,6 +1,8 @@
 # 04 — renderEntryHTML + fetchWidgetData seams + hostile-input tests (B7)
 
-**Status:** ready-for-agent · **Type:** AFK · **Lane:** deploylog-widget
+**Status:** done
+**Type:** AFK
+**Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
 **Blocked by:** issues/03-pure-decision-core.md
 **Verification:** contract B7.1-2 — hostile-input tests on `renderEntryHTML` (fields escaped, unknown type gated) + fetch-stub tests on `fetchWidgetData` (non-200/malformed → null, never throws). Signal: `vitest run`.

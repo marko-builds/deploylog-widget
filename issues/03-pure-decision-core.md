@@ -1,8 +1,10 @@
 # 03 — Widget pure decision core + position/accent drift fix (B6 + A1.5)
 
-**Status:** ready-for-agent · **Type:** human-in-the-loop (one product call gates an otherwise-AFK slice) · **Lane:** deploylog-widget
+**Status:** done
+**Type:** AFK
+**Lane:** deploylog-widget
 **Parent:** deploylog/docs/prd-satellites-hardening.md
-**Blocked by:** issues/01-widget-ci-workflow.md · **Human gate:** the `data-position` direction below must be settled by Marko before implementing (implement top positions vs trim README). Once settled, the rest is mechanical AFK.
+**Blocked by:** issues/01-widget-ci-workflow.md (done) · **Human gate: SETTLED 2026-08-18 by Marko** — trim the README to the two real values. No open human gate remains; the slice is mechanical AFK.
 **Verification:** contract B6.1-4, A1.5 — data-in/data-out unit tests for merge/unread/parse; position validator rejects/normalizes unknown values. Signal: `vitest run`.
 
 ## What to build
@@ -20,9 +22,11 @@ jsdom + four global stubs. The class keeps the side effects and delegates every 
 - `parseWidgetData(json)` — malformed 200 body → null (not throw).
 - `parseConfig(script)` — validate `data-position` / `data-theme` / `data-accent` instead of `as`
   casts. Resolves the README lie (finding #4): `data-position="top-right"` currently type-checks in
-  and silently renders bottom-right. **Direction decision (settle at red-team / with Marko):**
-  either implement top positions in `styles.ts` + `types.ts`, or trim the README to the two real
-  values — the validator enforces whichever is chosen.
+  and silently renders bottom-right. **Direction decision — SETTLED 2026-08-18 by Marko: trim the README.**
+  The supported set is `bottom-left` and `bottom-right`, and those two only. Do **not** add top
+  positions to `styles.ts` / `types.ts`. Update the README so it documents exactly those two
+  values, and make `parseConfig` enforce that set — an unknown `data-position` normalizes to the
+  default rather than type-checking in and silently rendering somewhere else.
 
 ## Acceptance criteria
 
