@@ -21,11 +21,80 @@ export function normalizeAccent(input: string | null | undefined): string {
 // gate entry_type before it's placed in a class name.
 const KNOWN_ENTRY_TYPES = new Set(['feature', 'fix', 'improvement', 'breaking', 'announcement'])
 
+// The only two positions styles.ts/types.ts implement. Kept in sync with the README.
+const KNOWN_POSITIONS = new Set<WidgetConfig['position']>(['bottom-right', 'bottom-left'])
+const KNOWN_THEMES = new Set<WidgetConfig['theme']>(['auto', 'light', 'dark'])
+
 // Escape text for safe interpolation into innerHTML (element-content context).
 export function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+// Dashboard "Widget Appearance" wins over the script's data-attributes — except
+// accent_color, where the API always sends the DEFAULT_ACCENT placeholder when
+// the dashboard hasn't set a custom color. Treating that placeholder as "no
+// accent" (same rule accentForStyles already applies) keeps a script-tag
+// data-accent from being silently clobbered on every fetch.
+export function mergeConfig(
+  scriptConfig: WidgetConfig,
+  wc: WidgetData['widget_config'] | null | undefined,
+): WidgetConfig {
+  if (!wc) return scriptConfig
+
+  const accentColor =
+    wc.accent_color && normalizeAccent(wc.accent_color).toLowerCase() !== DEFAULT_ACCENT
+      ? normalizeAccent(wc.accent_color)
+      : scriptConfig.accentColor
+
+  return {
+    ...scriptConfig,
+    position: wc.position ?? scriptConfig.position,
+    theme: wc.theme ?? scriptConfig.theme,
+    accentColor,
+  }
+}
+
+// entries[0] is assumed latest; unread = strictly after lastSeen by ISO-string
+// chronological comparison. A null lastSeen (never opened) counts everything.
+export function unreadCount(entries: Entry[], lastSeen: string | null): number {
+  if (entries.length === 0) return 0
+  if (lastSeen === null) return entries.length
+  return entries.filter((e) => e.published_at > lastSeen).length
+}
+
+// A malformed 200 body (missing/wrong-shaped fields, or not even an object)
+// must not throw later when the widget reads project/entries — normalize it
+// to null instead.
+export function parseWidgetData(json: unknown): WidgetData | null {
+  if (!json || typeof json !== 'object') return null
+  const data = (json as { data?: unknown }).data
+  if (!data || typeof data !== 'object') return null
+  const candidate = data as Partial<WidgetData>
+  if (!Array.isArray(candidate.entries) || !candidate.project) return null
+  return candidate as WidgetData
+}
+
+// Validates data-position/data-theme/data-accent against the sets the rest of
+// the widget actually implements, instead of `as`-casting an arbitrary string
+// through. An unsupported value (e.g. a top-* position) normalizes to the
+// default rather than type-checking in and silently rendering somewhere else.
+export function parseConfig(script: HTMLScriptElement, projectId: string): WidgetConfig {
+  const position = script.getAttribute('data-position')
+  const theme = script.getAttribute('data-theme')
+
+  return {
+    projectId,
+    position: KNOWN_POSITIONS.has(position as WidgetConfig['position'])
+      ? (position as WidgetConfig['position'])
+      : 'bottom-right',
+    theme: KNOWN_THEMES.has(theme as WidgetConfig['theme'])
+      ? (theme as WidgetConfig['theme'])
+      : 'auto',
+    accentColor: normalizeAccent(script.getAttribute('data-accent')),
+    apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
+  }
 }
 
 export function init() {
@@ -45,13 +114,7 @@ export function init() {
     return
   }
 
-  const config: WidgetConfig = {
-    projectId,
-    position: (script.getAttribute('data-position') as WidgetConfig['position']) ?? 'bottom-right',
-    theme: (script.getAttribute('data-theme') as WidgetConfig['theme']) ?? 'auto',
-    accentColor: normalizeAccent(script.getAttribute('data-accent')),
-    apiUrl: script.getAttribute('data-api-url') ?? DEFAULT_API_URL,
-  }
+  const config = parseConfig(script, projectId)
 
   const widget = new DeployLogWidget(config)
   widget.mount()
@@ -156,10 +219,8 @@ class DeployLogWidget {
   }
 
   private getUnreadCount(): number {
-    if (!this.data?.entries.length) return 0
-    const lastSeen = this.getLastSeenTimestamp()
-    if (!lastSeen) return this.data.entries.length
-    return this.data.entries.filter((e) => e.published_at > lastSeen).length
+    if (!this.data) return 0
+    return unreadCount(this.data.entries, this.getLastSeenTimestamp())
   }
 
   private async fetchData() {
@@ -170,24 +231,18 @@ class DeployLogWidget {
       if (!res.ok) return
 
       const json = await res.json()
-      this.data = json.data
 
       // Defend the host page: a malformed 200 body must not throw later in
       // open() when we read project/entries.
-      if (!this.data || !Array.isArray(this.data.entries) || !this.data.project) {
-        this.data = null
-        return
-      }
+      this.data = parseWidgetData(json)
+      if (!this.data) return
 
       // Apply the dashboard-saved appearance over the script defaults, then
       // re-render the parts that depend on it: styles (theme + accent) and the
       // trigger (position). "Widget Appearance" in the dashboard is the source
       // of truth, so it wins over the script's data-attributes.
-      const wc = this.data?.widget_config
-      if (wc) {
-        if (wc.position) this.config.position = wc.position
-        if (wc.theme) this.config.theme = wc.theme
-        if (wc.accent_color) this.config.accentColor = normalizeAccent(wc.accent_color)
+      if (this.data.widget_config) {
+        this.config = mergeConfig(this.config, this.data.widget_config)
         this.applyStyles()
       }
 
