@@ -47,4 +47,4 @@ The production bundle (`dist/widget.js`) is served from `cdn.deploylog.dev` (Clo
 
 - [DeployLog](https://deploylog.dev): the changelog platform
 - [CLI](https://www.npmjs.com/package/deploylog) · [GitHub Action](https://github.com/marketplace/actions/publish-to-deploylog)
-- [Support](https://github.com/marko-builds/deploylog/issues)
+- [Support](https://github.com/deploylogdev/deploylog/issues)
