@@ -51,7 +51,7 @@ Only two positions exist, both at the bottom. Any other value, from the script t
 
 ## What it loads, and when
 
-The widget fetches the changelog feed, the list of your published entries, once, on mount, from `/api/widget-data` with your project ID. It never polls and never refreshes. Publish an entry and a visitor with the page already open sees it on their next page load.
+The widget fetches the changelog feed, the list of your published entries, once, on mount, from `/api/widget-data` with your project ID. The same entries make up your public changelog page, chapter 03. It never polls and never refreshes. Publish an entry and a visitor with the page already open sees it on their next page load.
 
 A feed that fails to load surfaces no error. The button still appears, clicking it does nothing, and nothing is written to the console.
 
@@ -69,6 +69,6 @@ An empty changelog still shows the button, with no badge. The panel reads "No up
 
 The email subscribe form always appears at the bottom of the panel; no attribute hides it.
 
-The footer link inviting visitors to create their own changelog appears on the free plan only, and no attribute switches it off.
+The footer link inviting visitors to create their own changelog appears on the free plan only, and no attribute switches it off. Chapter 12 covers plans.
 
-Each entry rendered in an opened panel counts as one view, once per page load.
+Each entry rendered in an opened panel counts as one view, once per page load. Chapter 09 covers what counts as a view.
