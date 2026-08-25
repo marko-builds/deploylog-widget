@@ -1,6 +1,6 @@
 # DeployLog Widget
 
-The embeddable changelog widget for [DeployLog](https://deploylog.dev). A small,
+The embeddable changelog widget for [DeployLog](https://deploylog.dev). It is a small,
 dependency-free button + panel that shows your latest changelog entries on any site.
 
 - **Tiny:** about 4 KB gzipped, vanilla TypeScript, no framework.
@@ -28,7 +28,7 @@ Configure via `data-` attributes on the script tag:
 | `data-project` | ✅ | none | Your DeployLog project ID. |
 | `data-position` | | `bottom-right` | Widget position: `bottom-right` or `bottom-left`. An unsupported value falls back to the default. |
 | `data-theme` | | `auto` | `auto` (follows the OS), `light`, or `dark`. |
-| `data-accent` | | none | A hex colour, leading `#` plus 3 or 6 digits, upper or lower case. It colours entry titles in the panel. Anything else is ignored: the widget falls back to `#18181b`, which it reads as no accent, so titles keep the theme's text colour. |
+| `data-accent` | | none | A hex color, leading `#` plus 3 or 6 digits, upper or lower case. It colors entry titles in the panel. Anything else is ignored: the widget falls back to `#18181b`, which it reads as no accent, so titles keep the theme's text color. |
 | `data-api-url` | | `https://deploylog.dev` | Override the API base (self-hosted / staging). |
 
 ## Development
@@ -47,4 +47,4 @@ The production bundle (`dist/widget.js`) is served from `cdn.deploylog.dev` (Clo
 
 - [DeployLog](https://deploylog.dev): the changelog platform
 - [CLI](https://www.npmjs.com/package/deploylog) · [GitHub Action](https://github.com/marketplace/actions/publish-to-deploylog)
-- [Support](https://github.com/deploylogdev/deploylog/issues)
+- [Support](https://github.com/marko-builds/deploylog/issues)
