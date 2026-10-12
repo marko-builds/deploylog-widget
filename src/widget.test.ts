@@ -510,3 +510,83 @@ describe('crash safety', () => {
     expect(addListenerFn).toHaveBeenCalled()
   })
 })
+
+// --- The "Create your own changelog" footer (deploylog issue 145) ---
+
+describe('branding footer', () => {
+  // The widget's shadow root is closed, so the test keeps the root the real
+  // attachShadow returns. Only fetch, the network boundary, is mocked.
+  let shadow: ShadowRoot | null = null
+  const realAttachShadow = Element.prototype.attachShadow
+
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeListener: vi.fn(),
+        addListener: vi.fn(),
+      })),
+    })
+    vi.spyOn(Element.prototype, 'attachShadow').mockImplementation(function (
+      this: Element,
+      options: ShadowRootInit,
+    ) {
+      shadow = realAttachShadow.call(this, options)
+      return shadow
+    })
+    delete (window as unknown as Record<string, unknown>).__deploylogMounted
+    document.getElementById('deploylog-widget')?.remove()
+  })
+
+  afterEach(() => {
+    shadow = null
+    delete (window as unknown as Record<string, unknown>).__deploylogMounted
+    document.getElementById('deploylog-widget')?.remove()
+    mockCurrentScript(null)
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  // Mounts the widget against a widget-data body, lets the fetch settle, opens
+  // the panel and returns it.
+  async function openPanelWith(data: Record<string, unknown>): Promise<Element> {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: { project: { name: 'P', slug: 'p' }, entries: [], ...data } }),
+      }),
+    )
+    mockCurrentScript(makeScript())
+    init()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    shadow!.querySelector<HTMLButtonElement>('.dl-trigger')!.click()
+    const panel = shadow!.querySelector('.dl-panel')
+    // A hidden footer only counts if the panel itself rendered.
+    expect(panel).not.toBeNull()
+    return panel!
+  }
+
+  it.each([
+    // The resolved flag from widget-data decides, whatever the plan says.
+    { shows_deploylog_branding: true, plan: 'pro', footer: true },
+    { shows_deploylog_branding: true, plan: 'free', footer: true },
+    { shows_deploylog_branding: false, plan: 'free', footer: false },
+    { shows_deploylog_branding: false, plan: 'pro', footer: false },
+    // An older API sends no flag: the plan rule decides, as it did before.
+    { shows_deploylog_branding: undefined, plan: 'free', footer: true },
+    { shows_deploylog_branding: undefined, plan: 'pro', footer: false },
+    // A value that is not a boolean is treated as no flag.
+    { shows_deploylog_branding: null, plan: 'free', footer: true },
+    { shows_deploylog_branding: 'true', plan: 'pro', footer: false },
+  ])(
+    'flag $shows_deploylog_branding on plan $plan: footer shown is $footer',
+    async ({ shows_deploylog_branding, plan, footer }) => {
+      const panel = await openPanelWith({ plan, shows_deploylog_branding })
+      expect(panel.querySelector('.dl-footer') !== null).toBe(footer)
+    },
+  )
+})

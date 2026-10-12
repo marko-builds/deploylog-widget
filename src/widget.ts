@@ -399,8 +399,11 @@ class DeployLogWidget {
     // Email subscribe form
     panel.appendChild(this.renderSubscribeForm())
 
-    // Action-CTA footer (free tier only) — converts better than a passive logo.
-    if (this.data.plan === 'free') {
+    // Action-CTA footer, shown while DeployLog branding is on; converts better than a
+    // passive logo. The API's resolved flag decides; an older API without it falls back
+    // to the plan rule, so the widget and the API deploy in either order (issue 145).
+    const branding = this.data.shows_deploylog_branding
+    if (typeof branding === 'boolean' ? branding : this.data.plan === 'free') {
       const footer = document.createElement('div')
       footer.className = 'dl-footer'
       footer.innerHTML = `<a href="https://deploylog.dev/?utm_source=widget&utm_medium=badge" target="_blank" rel="noopener">Create your own changelog →</a>`

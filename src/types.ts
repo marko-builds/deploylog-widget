@@ -23,6 +23,9 @@ export interface WidgetData {
   project: { name: string; slug: string }
   entries: Entry[]
   plan: string
+  // Whether DeployLog branding shows (deploylog issue 144). Absent from an older
+  // API, in which case the widget falls back to `plan`.
+  shows_deploylog_branding?: boolean
   // Appearance saved in the dashboard. The widget applies this over the
   // script's data-attributes so "Widget Appearance" settings actually take
   // effect on the embedded widget.
