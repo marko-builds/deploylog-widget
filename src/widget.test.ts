@@ -581,6 +581,7 @@ describe('branding footer', () => {
     { shows_deploylog_branding: undefined, plan: 'pro', footer: false },
     // A value that is not a boolean is treated as no flag.
     { shows_deploylog_branding: null, plan: 'free', footer: true },
+    { shows_deploylog_branding: 'true', plan: 'pro', footer: false },
   ])(
     'flag $shows_deploylog_branding on plan $plan: footer shown is $footer',
     async ({ shows_deploylog_branding, plan, footer }) => {
